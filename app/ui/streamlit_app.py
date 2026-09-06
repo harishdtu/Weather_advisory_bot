@@ -1,7 +1,14 @@
+from pathlib import Path
+import sys
+import uuid
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import streamlit as st
 from app.graph.workflow import LangGraphRunner
 from app.llm.composer import compose_response
-import uuid
 
 st.set_page_config(page_title="Weather Advisory Support Bot", layout="wide")
 
