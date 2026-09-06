@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 from .models import SOP
 import operator
+import re
 
 OPS = {
     ">": operator.gt,
@@ -9,6 +10,16 @@ OPS = {
     "<=": operator.le,
     "==": operator.eq,
     "!=": operator.ne,
+}
+
+ACTIVITY_ALIASES = {
+    "run": {"run", "running", "runner", "jog", "jogging", "exercise", "outdoor exercise", "workout"},
+    "cycle": {"cycle", "cycling", "bicycle", "bike", "biking", "ride", "riding", "cyclist"},
+    "walk": {"walk", "walking", "hike", "hiking", "hiker", "trek", "trekking", "stroll", "strolling"},
+    "picnic": {"picnic", "picnicking", "outdoor meal"},
+    "travel": {"travel", "commute", "drive", "driving", "trip"},
+    "park": {"park", "play", "playing", "playground"},
+    "pets": {"pet", "pets", "dog", "dog walk", "walk dog"},
 }
 
 
@@ -39,12 +50,26 @@ def _activity_aliases(value: str):
     v = (value or "").lower().strip()
     if not v:
         return set()
-    aliases = {v}
-    if v.endswith("ing"):
-        aliases.add(v[:-3])
-        aliases.add(v[:-3] + "e")
-    if v.endswith("s") and not v.endswith("ss"):
-        aliases.add(v[:-1])
+
+    normalized = re.sub(r"[^a-z0-9]+", " ", v).strip()
+    aliases = {normalized}
+    if not normalized:
+        return aliases
+
+    for canonical, forms in ACTIVITY_ALIASES.items():
+        if normalized in forms or any(form in normalized for form in forms):
+            aliases.update(forms)
+            aliases.add(canonical)
+
+    if normalized.endswith("ing"):
+        aliases.add(normalized[:-3])
+        aliases.add(normalized[:-3] + "e")
+    if normalized.endswith("s") and not normalized.endswith("ss"):
+        aliases.add(normalized[:-1])
+    if normalized.endswith("er"):
+        aliases.add(normalized[:-2])
+    if " " in normalized:
+        aliases.add(normalized.replace(" ", ""))
     return aliases
 
 
@@ -76,6 +101,38 @@ def sop_matches(sop: SOP, weather: Dict[str, Any], intent: Dict[str, Any]) -> bo
         if not evaluate_condition(cond, weather, intent):
             return False
 
+    return True
+
+
+def sop_targets_intent(sop: SOP, intent: Dict[str, Any]) -> bool:
+    """Return True if the SOP is relevant to the given intent by activity/group or is global.
+    This does NOT evaluate weather conditions.
+    """
+    act = intent.get("activity")
+    grp = intent.get("group")
+
+    # If SOP lists activities, require activity to match
+    if sop.activities:
+        if not act:
+            return False
+        act_aliases = _activity_aliases(act)
+        if any(
+            alias in act_aliases
+            for a in sop.activities
+            for alias in _activity_aliases(a)
+        ):
+            return True
+        return False
+
+    # If SOP lists groups, require group to match
+    if sop.groups:
+        if not grp:
+            return False
+        if any(g.lower() in grp.lower() or grp.lower() in g.lower() for g in sop.groups):
+            return True
+        return False
+
+    # If neither activities nor groups are specified, treat as global (applies to all intents)
     return True
 
 

@@ -1,4 +1,6 @@
 import yaml
+import sys
+sys.path.insert(0, '.')
 from app.graph.workflow import LangGraphRunner
 from app.weather.client import WeatherClient, WeatherError
 

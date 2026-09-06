@@ -8,23 +8,52 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+ACTIVITY_ALIASES = {
+    "run": {"run", "running", "runner", "jog", "jogging", "exercise", "outdoor exercise", "workout"},
+    "cycle": {"cycle", "cycling", "bicycle", "bike", "biking", "ride", "riding", "cyclist"},
+    "walk": {"walk", "walking", "hike", "hiking", "hiker", "trek", "trekking", "stroll", "strolling"},
+    "picnic": {"picnic", "picnicking", "outdoor meal"},
+    "travel": {"travel", "commute", "drive", "driving", "trip"},
+    "park": {"park", "play", "playing", "playground"},
+    "pets": {"pet", "pets", "dog", "dog walk", "walk dog"},
+}
+
+GROUP_ALIASES = {
+    "children": {"child", "children", "kid", "kids"},
+    "elderly": {"elderly", "old", "senior", "seniors"},
+    "pets": {"pet", "pets", "dog", "dogs"},
+}
+
+
 def parse_intent_simple(text: str) -> Dict[str, Optional[str]]:
     # simple heuristic parser
     text_l = text.lower()
-    # activity detection
-    activities = ["cycle", "cycling", "bike", "run", "jog", "picnic", "picnicking", "walk", "hike", "travel", "commute", "park", "play"]
+    # activity detection: map any known alias (word-boundary match)
     activity = None
-    for a in activities:
-        if a in text_l:
-            activity = a
+    # build alias -> canonical map
+    alias_map = {}
+    for canonical, aliases in ACTIVITY_ALIASES.items():
+        for a in aliases:
+            alias_map[a] = canonical
+
+    # sort aliases by length to prefer multi-word or longer matches
+    sorted_aliases = sorted(alias_map.keys(), key=lambda s: -len(s))
+    for alias in sorted_aliases:
+        # match as whole word or phrase
+        pattern = r"\b" + re.escape(alias) + r"\b"
+        if re.search(pattern, text_l):
+            activity = alias_map[alias]
             break
 
-    # group detection
-    groups = ["child", "children", "kid", "elderly", "pet", "pets", "dog"]
+    # group detection: normalize to canonical group names
     group = None
-    for g in groups:
-        if g in text_l:
-            group = g
+    for canonical, aliases in GROUP_ALIASES.items():
+        for a in aliases:
+            pattern = r"\b" + re.escape(a) + r"\b"
+            if re.search(pattern, text_l):
+                group = canonical
+                break
+        if group:
             break
 
     # time detection

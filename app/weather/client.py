@@ -40,14 +40,63 @@ class WeatherClient:
         if not results:
             raise WeatherError("geocoding_no_results")
 
-        first = results[0]
+        query_norm = (city or "").strip().lower()
+        city_aliases = {
+            "bangalore": ["bangalore", "bengaluru"],
+            "bengaluru": ["bengaluru", "bangalore"],
+        }
+        preferred = None
+        candidate_names = city_aliases.get(query_norm, [query_norm])
+        for alias in candidate_names:
+            for res in results:
+                name = (res.get("name") or "").strip()
+                name_norm = name.lower()
+                if name_norm == alias:
+                    preferred = res
+                    break
+            if preferred is not None:
+                break
+
+        if preferred is None:
+            for alias in candidate_names:
+                for res in results:
+                    name = (res.get("name") or "").strip()
+                    name_norm = name.lower()
+                    normalized_name = name_norm.replace(" town", "").replace(" city", "").strip()
+                    if normalized_name == alias:
+                        preferred = res
+                        break
+                if preferred is not None:
+                    break
+
+        if preferred is None:
+            best_score = -1
+            for res in results:
+                name = (res.get("name") or "").strip()
+                name_norm = name.lower()
+                score = 0
+                if name_norm == query_norm:
+                    score += 100
+                elif query_norm in name_norm:
+                    score += 20
+                if "town" in name_norm:
+                    score -= 10
+                if "district" in name_norm:
+                    score -= 10
+                if score > best_score:
+                    best_score = score
+                    preferred = res
+
+        if preferred is None:
+            preferred = results[0]
+
         try:
             loc = Location(
-                name=first.get("name"),
-                country=first.get("country"),
-                latitude=float(first.get("latitude")),
-                longitude=float(first.get("longitude")),
-                admin1=first.get("admin1"),
+                name=preferred.get("name"),
+                country=preferred.get("country"),
+                latitude=float(preferred.get("latitude")),
+                longitude=float(preferred.get("longitude")),
+                admin1=preferred.get("admin1"),
             )
         except Exception as e:
             logger.exception("Invalid geocoding data")
@@ -106,20 +155,45 @@ class WeatherClient:
             logger.exception("Malformed forecast JSON")
             raise WeatherError("forecast_malformed") from e
 
-        # Extract current weather info
-        cw = data.get("current_weather") or {}
-        # open-meteo sometimes returns different fields; map carefully
+        hourly = data.get("hourly") or {}
+        current_weather = data.get("current_weather") or {}
+        current_time = current_weather.get("time")
+        current_index = None
+        if current_time:
+            times = hourly.get("time") or []
+            for i, t in enumerate(times):
+                if t.startswith(current_time[:13]):
+                    current_index = i
+                    break
+            if current_index is None and times:
+                current_index = 0
+
+        def pick_value(field: str, fallback: Optional[float] = None):
+            if current_weather.get(field) is not None:
+                return current_weather.get(field)
+            if current_index is not None:
+                values = hourly.get(field)
+                if values and len(values) > current_index:
+                    value = values[current_index]
+                    if value is not None:
+                        return value
+            if fallback is not None:
+                return fallback
+            return None
+
+        # open-meteo exposes current conditions under current_weather and hourly values for
+        # UV/probability/gusts; use the hourly value at the same timestamp when current data is absent.
         try:
             current = WeatherCurrent(
-                temperature_2m=cw.get("temperature"),
-                wind_speed_10m=cw.get("windspeed"),
-                wind_gusts_10m=None,
-                precipitation=None,
-                precipitation_probability=None,
-                uv_index=None,
-                apparent_temperature=None,
-                weather_code=cw.get("weathercode"),
-                raw=cw,
+                temperature_2m=pick_value("temperature"),
+                wind_speed_10m=pick_value("windspeed"),
+                wind_gusts_10m=pick_value("wind_gusts_10m"),
+                precipitation=pick_value("precipitation"),
+                precipitation_probability=pick_value("precipitation_probability"),
+                uv_index=pick_value("uv_index"),
+                apparent_temperature=pick_value("apparent_temperature"),
+                weather_code=pick_value("weathercode"),
+                raw=current_weather,
             )
         except ValidationError as e:
             logger.exception("Invalid current weather schema")

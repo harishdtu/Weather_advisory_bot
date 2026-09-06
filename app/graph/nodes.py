@@ -2,7 +2,7 @@ from typing import Dict, Any
 from app.llm.intent import parse_intent_simple
 from app.weather.client import WeatherClient, WeatherError
 from app.policies.loader import load_sops
-from app.policies.evaluator import sop_matches, rank_sops
+from app.policies.evaluator import sop_matches, rank_sops, sop_targets_intent
 import logging
 
 logger = logging.getLogger(__name__)
@@ -83,21 +83,43 @@ def node_fetch_weather(state: Dict[str, Any]):
 
 def node_match_sops(state: Dict[str, Any]):
     sops = load_sops(SOPS_PATH)
-    matched = []
     weather = state.get("weather", {})
     intent = state.get("intent", {})
-    for s in sops:
-        if sop_matches(s, weather, intent):
-            matched.append(s)
 
-    state["matched_sops"] = [s.id for s in matched]
-    if not matched:
+    # Find SOPs that explicitly target the user's activity/group (explicit candidates)
+    explicit_candidates = [s for s in sops if (s.activities or s.groups) and sop_targets_intent(s, intent)]
+
+    # If user specified an activity but no SOP explicitly targets that activity/group,
+    # then truly no policy covers this intent (e.g., unsupported activity)
+    if intent.get("activity") and not explicit_candidates:
+        state["matched_sops"] = []
         state["no_policy"] = True
         return state
 
-    ranked = rank_sops(matched)
-    state["selected_sop"] = ranked[0].model_dump()
+    # Evaluate conditions for all SOPs (including global se vere-weather rules)
+    matched = [s for s in sops if sop_matches(s, weather, intent)]
+
+    state["matched_sops"] = [s.id for s in matched]
     state["matched_sops_full"] = [s.model_dump() for s in matched]
+    # include explicit candidate list for informational purposes
+    state["candidate_sops"] = [s.model_dump() for s in explicit_candidates]
+
+    if matched:
+        ranked = rank_sops(matched)
+        state["selected_sop"] = ranked[0].model_dump()
+        state["selected_sop_triggered"] = True
+    else:
+        # No SOP triggered by current weather. If we have explicit candidates, choose top candidate deterministically.
+        if explicit_candidates:
+            ranked = rank_sops(explicit_candidates)
+            state["selected_sop"] = ranked[0].model_dump()
+            state["selected_sop_triggered"] = False
+        else:
+            # No explicit SOP candidate for the activity and nothing triggered -> no policy
+            state["selected_sop"] = None
+            state["selected_sop_triggered"] = False
+            state["no_policy"] = True
+
     return state
 
 
@@ -119,7 +141,11 @@ def node_compose_response(state: Dict[str, Any]):
     weather = state.get("weather")
 
     # reason: simple explanation
-    reason = "Matches policy conditions based on current weather and activity."
+    triggered = state.get("selected_sop_triggered", False)
+    if triggered:
+        reason = "Matches policy conditions based on current weather and activity."
+    else:
+        reason = "A policy covers this activity, but current weather does not trigger any safety restriction."
 
     recommendation = policy.get("guidance") or "Follow policy guidance."
 
