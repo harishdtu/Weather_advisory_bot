@@ -1,0 +1,195 @@
+sops:
+  - id: SOP-01
+    name: "Strong Wind - Cycling"
+    category: "cycling"
+    severity: "HIGH"
+    description: "Avoid cycling when sustained wind speed exceeds 40 km/h"
+    activities:
+      - cycling
+      - cycle
+      - bike
+      - biking
+      - ride
+    groups: []
+    conditions:
+      - name: wind_fast
+        field: current.wind_speed_10m
+        operator: ">"
+        value: 40
+    guidance: "Do not cycle during sustained winds > 40 km/h."
+    priority: 100
+
+  - id: SOP-02
+    name: "High UV - Outdoor Exercise"
+    category: "outdoor_exercise"
+    severity: "MODERATE"
+    description: "Avoid unprotected outdoor exercise when UV index >= 8"
+    activities:
+      - run
+      - jog
+      - exercise
+      - outdoor exercise
+    groups: []
+    conditions:
+      - name: uv_high
+        field: current.uv_index
+        operator: ">="
+        value: 8
+    guidance: "Reduce intensity and seek shade during high UV."
+    priority: 80
+
+  - id: SOP-03
+    name: "Heavy Precipitation - General Outdoor"
+    category: "recreation"
+    severity: "HIGH"
+    description: "Heavy precipitation makes outdoor activities unsafe"
+    activities:
+      - picnic
+      - park
+      - outdoor
+      - picnicking
+    groups: []
+    conditions:
+      - name: precip_prob
+        field: current.precipitation_probability
+        operator: ">="
+        value: 70
+    guidance: "Postpone outdoor recreation during heavy precipitation probability."
+    priority: 90
+
+  - id: SOP-04
+    name: "Thunderstorm - All Outdoor"
+    category: "severe_weather"
+    severity: "CRITICAL"
+    description: "Thunderstorm indicators: high precipitation probability and weather code"
+    activities: []
+    groups: []
+    conditions:
+      - name: precip_prob
+        field: current.precipitation_probability
+        operator: ">="
+        value: 60
+      - name: weather_code
+        field: current.weather_code
+        operator: ">="
+        value: 95
+    guidance: "Avoid all outdoor activities during potential thunderstorms."
+    priority: 120
+
+  - id: SOP-05
+    name: "Extreme Heat - Vulnerable People"
+    category: "elderly"
+    severity: "HIGH"
+    description: "Protect elderly or infants when temperature exceeds 38C"
+    activities: []
+    groups:
+      - children
+      - elderly
+    conditions:
+      - name: hot_temp
+        field: current.temperature_2m
+        operator: ">"
+        value: 38
+    guidance: "Avoid prolonged outdoor exposure for vulnerable people."
+    priority: 95
+
+  - id: SOP-06
+    name: "Snow/Ice - Walking/Hiking"
+    category: "hiking"
+    severity: "HIGH"
+    description: "Snow or freezing conditions increase risk for walking/hiking"
+    activities:
+      - walk
+      - hike
+      - walking
+      - hiking
+    groups: []
+    conditions:
+      - name: snowfall
+        field: current.precipitation
+        operator: ">="
+        value: 5
+    guidance: "Avoid hiking or walking on icy/snow-covered surfaces."
+    priority: 85
+
+  - id: SOP-07
+    name: "Travel - Heavy Rain Delay"
+    category: "travel"
+    severity: "MODERATE"
+    description: "Heavy rain increases travel delays and hazards"
+    activities:
+      - travel
+      - commute
+      - drive
+    groups: []
+    conditions:
+      - name: precip_prob
+        field: current.precipitation_probability
+        operator: ">="
+        value: 50
+    guidance: "Expect delays; exercise caution while traveling."
+    priority: 70
+
+  - id: SOP-08
+    name: "Children - High Wind Gusts"
+    category: "children"
+    severity: "HIGH"
+    description: "High wind gusts are dangerous for children in exposed areas"
+    activities:
+      - play
+      - park
+      - outdoor
+    groups:
+      - children
+    conditions:
+      - name: gusts
+        field: current.wind_gusts_10m
+        operator: ">"
+        value: 50
+    guidance: "Keep children indoors during very strong gusts."
+    priority: 110
+
+  - id: SOP-09
+    name: "Pets - Extreme Heat"
+    category: "pets"
+    severity: "MODERATE"
+    description: "Avoid walking pets when temperatures are extreme"
+    activities:
+      - pets
+      - dog
+      - walk dog
+      - dog walk
+    groups: []
+    conditions:
+      - name: hot_temp
+        field: current.temperature_2m
+        operator: ">"
+        value: 34
+    guidance: "Limit pet exercise during high heat; provide water and shade."
+    priority: 60
+
+  - id: SOP-10
+    name: "Picnic Suitability - Fuzzy"
+    category: "picnic"
+    severity: "LOW"
+    description: "Composite rule combining precipitation probability, temperature and UV"
+    activities:
+      - picnic
+      - picnicking
+    groups: []
+    fuzzy: true
+    conditions:
+      - name: precip_prob_low
+        field: current.precipitation_probability
+        operator: "<"
+        value: 30
+      - name: temp_ok
+        field: current.temperature_2m
+        operator: ">="
+        value: 15
+      - name: uv_ok
+        field: current.uv_index
+        operator: "<"
+        value: 8
+    guidance: "Good day for a picnic if light rain unlikely, comfortable temperature and moderate UV."
+    priority: 50
